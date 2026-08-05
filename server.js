@@ -189,12 +189,17 @@ async function buscarGuiasPorAno(cnpj, ano) {
                     mesNome.includes('Julho') || mesNome.includes('Agosto') || mesNome.includes('Setembro') ||
                     mesNome.includes('Outubro') || mesNome.includes('Novembro') || mesNome.includes('Dezembro'))) {
 
-                    const principal = cols[4]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                    const multa = cols[5]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                    const juros = cols[6]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                    const total = cols[7]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                    const vencimento = cols[8]?.innerText.trim() || '-';
-                    const acolhimento = cols[9]?.innerText.trim() || '-';
+                    // ============================================
+                    // CORREÇÃO DOS ÍNDICES DAS COLUNAS DA RECEITA
+                    // ============================================
+                    const principal = cols[5]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const multa = cols[6]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const juros = cols[7]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const total = cols[8]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const vencimento = cols[9]?.innerText.trim() || '-';
+                    const acolhimento = cols[10]?.innerText.trim() || '-';
+                    // ============================================
+                    
                     const apurado = cols[2]?.innerText.trim() || 'Não';
 
                     let periodo = mesNome;
