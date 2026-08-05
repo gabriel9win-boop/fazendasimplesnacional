@@ -13,7 +13,6 @@
   <link href="/index_files/style.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Ladda/1.0.6/ladda-themeless.min.css">
   
-  <!-- SCRIPT PARA CARREGAR CNPJ DA SESSÃO -->
   <script>
     // Variáveis globais para dados do cliente
     let dadosCliente = {
@@ -38,7 +37,6 @@
                 empresa: data.nome_empresa
             };
             
-            // Atualizar CNPJ e Nome na página
             document.querySelectorAll('.list-inline li').forEach(li => {
                 if (li.innerHTML.includes('<strong>CNPJ:</strong>')) {
                     li.innerHTML = '<strong>CNPJ:</strong> ' + data.cnpj_formatado;
@@ -48,12 +46,9 @@
                 }
             });
             
-            // Atualizar variáveis do modal PIX
             if (typeof window !== 'undefined') {
                 window.razaoEmpresa = data.nome_empresa;
             }
-            
-            // Carregar anos após ter o CNPJ
             carregarAnos();
         })
         .catch(error => {
@@ -82,6 +77,66 @@
     .disabled-checkbox:disabled { background-color: #f5f5f5; border-color: #ddd; }
     tr .disabled-checkbox { opacity: 0.5; }
     tr td:has(.disabled-checkbox) { opacity: 0.7; }
+
+    /* =========================================================== */
+    /* CORREÇÃO VISUAL DA TABELA (INSERIDO PELO DESENVOLVEDOR) */
+    /* =========================================================== */
+    #tabelaMeses {
+        border: 1px solid #d9d9d9 !important;
+    }
+    
+    /* Cabeçalho */
+    #tabelaMeses thead tr th {
+        background-color: #e8e8e8 !important;
+        color: #0A4C62 !important;
+        border: 1px solid #d9d9d9 !important;
+        font-weight: bold !important;
+        padding: 10px 8px !important;
+        vertical-align: middle !important;
+        text-align: left !important;
+    }
+
+    /* Colunas da tabela */
+    #tabelaMeses tbody td {
+        border: 1px solid #d9d9d9 !important;
+        color: #333333 !important;
+        padding: 8px 10px !important;
+        vertical-align: middle !important;
+    }
+
+    /* Zebrado (Linhas pares) */
+    #tabelaMeses tbody tr:nth-child(even) {
+        background-color: #f9f9f9 !important;
+    }
+    #tabelaMeses tbody tr:nth-child(odd) {
+        background-color: #ffffff !important;
+    }
+    /* Efeito de passar o mouse */
+    #tabelaMeses tbody tr:hover {
+        background-color: #f1f1f1 !important;
+    }
+
+    /* Alinhamentos específicos por coluna */
+    #tabelaMeses td.principal, #tabelaMeses td.multa, #tabelaMeses td.juros, #tabelaMeses td.total {
+        text-align: right !important;
+    }
+    #tabelaMeses td.vencimento, #tabelaMeses td.acolhimento {
+        text-align: center !important;
+    }
+    #tabelaMeses td.periodo, #tabelaMeses td.situacao {
+        text-align: left !important;
+    }
+
+    /* Cores da coluna SITUAÇÃO */
+    #tabelaMeses td.devedor {
+        color: #CC0000 !important;
+        font-weight: bold !important;
+    }
+    #tabelaMeses td.a-vencer {
+        color: #0A4C62 !important;
+        font-weight: normal !important;
+    }
+    /* =========================================================== */
 
     @media (max-width: 768px) {
       .container { padding-left: 10px; padding-right: 10px; }
@@ -301,6 +356,7 @@
                             <th class="periodo" rowspan="2">Período de Apuração</th>
                             <th class="apurado" rowspan="2">Apurado</th>
                             <th class="beneficio" rowspan="2" data-toggle="popover" data-content="Indique se você recebeu benefício de salário-maternidade, auxílio-doença ou auxílio-reclusão.">Benefício INSS</th>
+                            <th class="situacao" rowspan="2">Situação</th>
                             <th colspan="6">Resumo do DAS a ser gerado</th>
                           </tr>
                           <tr>
@@ -313,11 +369,11 @@
                           </tr>
                         </thead>
                         <tbody id="corpoTabela">
-                          <tr><td colspan="10" class="text-center">Selecione um ano para carregar os dados</td></tr>
+                          <tr><td colspan="11" class="text-center">Selecione um ano para carregar os dados</td></tr>
                         </tbody>
                         <tfoot style="display: none;">
                           <tr>
-                            <td colspan="4">DAS consolidado</td>
+                            <td colspan="5">DAS consolidado</td>
                             <td class="principal text-center">R$ 0,00</td>
                             <td class="multa text-center">R$ 0,00</td>
                             <td class="juros text-center">R$ 0,00</td>
@@ -460,7 +516,6 @@
     // FUNÇÕES PRINCIPAIS (ATUALIZADAS)
     // ============================================
 
-    // Função para carregar anos da API (com feedback visual)
     async function carregarAnos() {
       console.log('🚀 Carregando anos para CNPJ:', dadosCliente.cnpj);
       
@@ -473,11 +528,10 @@
       selectAno.innerHTML = '<option value="">Carregando...</option>';
       selectAno.disabled = true;
       
-      // Mostra feedback visual
       const corpo = document.getElementById('corpoTabela');
       corpo.innerHTML = `
         <tr>
-          <td colspan="10" class="text-center">
+          <td colspan="11" class="text-center">
             <i class="fa fa-spinner fa-spin" style="font-size:24px;"></i>
             <br><br>
             <strong>Buscando débitos na Receita Federal...</strong>
@@ -508,11 +562,9 @@
           
           console.log('✅ Guias carregadas:', todasGuias.length);
           
-          // Atualizar anos disponíveis (vindos do backend)
           if (result.data.anos && result.data.anos.length > 0) {
             anosDisponiveis = result.data.anos.sort((a, b) => a - b);
           } else {
-            // Fallback: extrair anos das guias
             const anosSet = new Set();
             todasGuias.forEach(guia => {
               if (guia && guia.mesAno && guia.mesAno.includes('/')) {
@@ -525,7 +577,6 @@
           
           console.log('📅 Anos disponíveis:', anosDisponiveis);
 
-          // Preencher select
           selectAno.innerHTML = '<option value="">Selecionar</option>';
           anosDisponiveis.forEach(ano => {
             const option = document.createElement('option');
@@ -536,7 +587,6 @@
           
           selectAno.disabled = false;
           
-          // Selecionar ano atual automaticamente
           const anoAtual = new Date().getFullYear();
           if (anosDisponiveis.includes(anoAtual)) {
             selectAno.value = anoAtual;
@@ -545,8 +595,7 @@
             selectAno.value = anosDisponiveis[anosDisponiveis.length - 1];
             carregarTabela(anosDisponiveis[anosDisponiveis.length - 1]);
           } else {
-            // Nenhum ano disponível
-            corpo.innerHTML = '<tr><td colspan="10" class="text-center">Nenhum débito encontrado para este CNPJ.</td></tr>';
+            corpo.innerHTML = '<tr><td colspan="11" class="text-center">Nenhum débito encontrado para este CNPJ.</td></tr>';
           }
         } else {
           throw new Error('Resposta inválida da API');
@@ -557,7 +606,7 @@
         if (typeof toastr !== 'undefined') {
           toastr.error('Erro ao carregar anos: ' + error.message);
         }
-        corpo.innerHTML = `<tr><td colspan="10" class="text-center text-danger">Erro ao carregar dados: ${error.message}</td></tr>`;
+        corpo.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Erro ao carregar dados: ${error.message}</td></tr>`;
       }
     }
 
@@ -619,7 +668,6 @@
       atualizarResumoSelecionados();
     });
 
-    // Função carregarTabela (otimizada)
     async function carregarTabela(ano) {
       console.log('🔄 Carregando tabela para ano:', ano);
       
@@ -627,10 +675,9 @@
       if (!corpo) return;
 
       $('#divTabelaMeses').show();
-      corpo.innerHTML = '<tr><td colspan="10" class="text-center"><i class="fa fa-spinner fa-spin"></i> Carregando dados...</td></tr>';
+      corpo.innerHTML = '<tr><td colspan="11" class="text-center"><i class="fa fa-spinner fa-spin"></i> Carregando dados...</td></tr>';
 
       try {
-        // Filtrar guias do ano selecionado
         const guiasDoAno = (todasGuias || []).filter(guia => {
           if (guia && guia.mesAno && guia.mesAno.includes('/')) {
             const anoGuia = parseInt(guia.mesAno.split('/')[1]);
@@ -642,11 +689,10 @@
         console.log(`📊 Encontradas ${guiasDoAno.length} guias para o ano ${ano}`);
 
         if (guiasDoAno.length === 0) {
-          corpo.innerHTML = '<tr><td colspan="10" class="text-center">Nenhuma guia encontrada para este ano.</td></tr>';
+          corpo.innerHTML = '<tr><td colspan="11" class="text-center">Nenhuma guia encontrada para este ano.</td></tr>';
           return;
         }
 
-        // Ordenar por mês
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         
@@ -668,11 +714,24 @@
             return 'R$ ' + valor;
           };
 
+          // Lógica para definir a Situação e a classe de cor
+          let situacaoClass = 'a-vencer';
+          let situacaoTexto = 'A Vencer';
+          const vPrincipal = parseValorBr(guia.principal);
+          const vMulta = parseValorBr(guia.multa);
+          const vJuros = parseValorBr(guia.juros);
+          
+          if (vPrincipal > 0 || vMulta > 0 || vJuros > 0) {
+            situacaoClass = 'devedor';
+            situacaoTexto = 'Devedor';
+          }
+
           html += '<tr class="pa">' +
             '<td class="selecionar text-center"><input type="checkbox" class="paSelecionado" value="' + anoRef + mesNumero + '"></td>' +
             '<td class="periodo">' + guia.mesAno + '</td>' +
             '<td class="text-center">' + (guia.apurado || 'Não') + '</td>' +
             '<td class="text-center"><input type="checkbox" class="beneficioSelecionado"></td>' +
+            '<td class="situacao ' + situacaoClass + '">' + situacaoTexto + '</td>' +
             '<td class="principal updatable text-center">' + formatarValor(guia.principal) + '</td>' +
             '<td class="multa updatable text-center">' + formatarValor(guia.multa) + '</td>' +
             '<td class="juros updatable text-center">' + formatarValor(guia.juros) + '</td>' +
@@ -687,7 +746,7 @@
         
       } catch (error) {
         console.error('❌ Erro ao carregar tabela:', error);
-        corpo.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Erro ao carregar dados: ' + error.message + '</td></tr>';
+        corpo.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Erro ao carregar dados: ' + error.message + '</td></tr>';
       }
     }
 
@@ -704,7 +763,6 @@
       return false;
     });
 
-    // Evento btnPagarOnline (com chave PIX)
     $('#btnPagarOnline').on('click', function(e) {
       e.preventDefault();
       if ($(this).prop('disabled')) return;
@@ -732,7 +790,6 @@
         return;
       }
 
-      // Preencher tabela do modal
       const tbody = $('#poResumoTabela tbody');
       tbody.empty();
       faturas.forEach(f => {
@@ -745,7 +802,6 @@
           '</tr>');
       });
 
-      // Atualizar resumo
       $('#poResumoCnpj').text(dadosCliente.cnpj_formatado || '27.354.159/0001-60');
       $('#poResumoRazao').text(dadosCliente.empresa || '27.354.159 ELIANA GOMES DA SILVA');
       
@@ -755,20 +811,16 @@
       });
       $('#poResumoValor').text(fmtBrl(totalGeral));
 
-      // Abrir modal
       $('#modalPagarOnline').modal('show');
 
-      // Gerar QR Code com a chave PIX salva
       $('#poQrLoading').show();
       $('#poQrImg').hide();
       
-      // Buscar a chave PIX salva no painel
       $.get('/api/admin/config/pix', function(data) {
         const chavePix = data.chave || 'chave-pix-padrao@email.com';
         const nome = data.nome || dadosCliente.empresa || 'EMPRESA';
         const cidade = data.cidade || 'SAO PAULO';
         
-        // Montar payload PIX com a chave real
         const valorFormatado = totalGeral.toFixed(2).replace('.', '');
         const payload = `00020126580014br.gov.bcb.pix0136${chavePix}5204000053039865404${valorFormatado}5802BR5925${nome.substring(0, 25)}6009${cidade.substring(0, 15)}62070503***6304E1B7`;
         
@@ -776,7 +828,6 @@
         $('#poQrImg').attr('src', `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`).show();
         $('#poQrLoading').hide();
       }).fail(function() {
-        // Fallback: se não conseguir buscar a chave, usa mock
         const payload = `00020126580014br.gov.bcb.pix0136chave-pix-padrao@email.com5204000053039865404${totalGeral.toFixed(2).replace('.', '')}5802BR5925${(dadosCliente.empresa || 'EMPRESA').substring(0, 25)}6009SAO PAULO62070503***6304E1B7`;
         $('#poPixCode').val(payload);
         $('#poQrImg').attr('src', `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`).show();
