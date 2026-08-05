@@ -79,13 +79,13 @@
     tr td:has(.disabled-checkbox) { opacity: 0.7; }
 
     /* =========================================================== */
-    /* CORREÇÃO VISUAL DA TABELA (INSERIDO PELO DESENVOLVEDOR) */
+    /* CORREÇÕES VISUAIS DA TABELA (INSERIDAS NO ORIGINAL) */
     /* =========================================================== */
     #tabelaMeses {
         border: 1px solid #d9d9d9 !important;
     }
     
-    /* Cabeçalho */
+    /* Cabeçalho - cinza e azul petróleo */
     #tabelaMeses thead tr th {
         background-color: #e8e8e8 !important;
         color: #0A4C62 !important;
@@ -96,7 +96,7 @@
         text-align: left !important;
     }
 
-    /* Colunas da tabela */
+    /* Células normais */
     #tabelaMeses tbody td {
         border: 1px solid #d9d9d9 !important;
         color: #333333 !important;
@@ -104,38 +104,19 @@
         vertical-align: middle !important;
     }
 
-    /* Zebrado (Linhas pares) */
-    #tabelaMeses tbody tr:nth-child(even) {
-        background-color: #f9f9f9 !important;
-    }
-    #tabelaMeses tbody tr:nth-child(odd) {
-        background-color: #ffffff !important;
-    }
-    /* Efeito de passar o mouse */
-    #tabelaMeses tbody tr:hover {
-        background-color: #f1f1f1 !important;
-    }
+    /* Zebrado exato */
+    #tabelaMeses tbody tr:nth-child(even) { background-color: #f9f9f9 !important; }
+    #tabelaMeses tbody tr:nth-child(odd) { background-color: #ffffff !important; }
+    #tabelaMeses tbody tr:hover { background-color: #f1f1f1 !important; }
 
-    /* Alinhamentos específicos por coluna */
-    #tabelaMeses td.principal, #tabelaMeses td.multa, #tabelaMeses td.juros, #tabelaMeses td.total {
-        text-align: right !important;
-    }
-    #tabelaMeses td.vencimento, #tabelaMeses td.acolhimento {
-        text-align: center !important;
-    }
-    #tabelaMeses td.periodo, #tabelaMeses td.situacao {
-        text-align: left !important;
-    }
+    /* Alinhamentos */
+    #tabelaMeses td.principal, #tabelaMeses td.multa, #tabelaMeses td.juros, #tabelaMeses td.total { text-align: right !important; }
+    #tabelaMeses td.vencimento, #tabelaMeses td.acolhimento { text-align: center !important; }
+    #tabelaMeses td.periodo, #tabelaMeses td.situacao { text-align: left !important; }
 
     /* Cores da coluna SITUAÇÃO */
-    #tabelaMeses td.devedor {
-        color: #CC0000 !important;
-        font-weight: bold !important;
-    }
-    #tabelaMeses td.a-vencer {
-        color: #0A4C62 !important;
-        font-weight: normal !important;
-    }
+    #tabelaMeses td.devedor { color: #CC0000 !important; font-weight: bold !important; }
+    #tabelaMeses td.a-vencer { color: #0A4C62 !important; font-weight: normal !important; }
     /* =========================================================== */
 
     @media (max-width: 768px) {
@@ -513,7 +494,7 @@
 
   <script>
     // ============================================
-    // FUNÇÕES PRINCIPAIS (ATUALIZADAS)
+    // FUNÇÕES PRINCIPAIS (CORRIGIDAS)
     // ============================================
 
     async function carregarAnos() {
@@ -714,17 +695,21 @@
             return 'R$ ' + valor;
           };
 
-          // Lógica para definir a Situação e a classe de cor
+          // ============================================
+          // LÓGICA EXATA DA SITUAÇÃO CORRIGIDA
+          // ============================================
           let situacaoClass = 'a-vencer';
           let situacaoTexto = 'A Vencer';
-          const vPrincipal = parseValorBr(guia.principal);
+
           const vMulta = parseValorBr(guia.multa);
           const vJuros = parseValorBr(guia.juros);
           
-          if (vPrincipal > 0 || vMulta > 0 || vJuros > 0) {
+          // Se tiver multa OU juros, é DEVEDOR
+          if (vMulta > 0 || vJuros > 0) {
             situacaoClass = 'devedor';
             situacaoTexto = 'Devedor';
           }
+          // ============================================
 
           html += '<tr class="pa">' +
             '<td class="selecionar text-center"><input type="checkbox" class="paSelecionado" value="' + anoRef + mesNumero + '"></td>' +
@@ -812,26 +797,34 @@
       $('#poResumoValor').text(fmtBrl(totalGeral));
 
       $('#modalPagarOnline').modal('show');
-
       $('#poQrLoading').show();
       $('#poQrImg').hide();
+      $('#poPixCode').val('');
       
+      // Puxar a chave PIX real do seu server.js
       $.get('/api/admin/config/pix', function(data) {
-        const chavePix = data.chave || 'chave-pix-padrao@email.com';
-        const nome = data.nome || dadosCliente.empresa || 'EMPRESA';
-        const cidade = data.cidade || 'SAO PAULO';
-        
-        const valorFormatado = totalGeral.toFixed(2).replace('.', '');
-        const payload = `00020126580014br.gov.bcb.pix0136${chavePix}5204000053039865404${valorFormatado}5802BR5925${nome.substring(0, 25)}6009${cidade.substring(0, 15)}62070503***6304E1B7`;
-        
-        $('#poPixCode').val(payload);
-        $('#poQrImg').attr('src', `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`).show();
-        $('#poQrLoading').hide();
+        if (data.chave && data.chave.length > 5) {
+            const chavePix = data.chave;
+            const nome = data.nome || dadosCliente.empresa || 'EMPRESA';
+            const cidade = data.cidade || 'SAO PAULO';
+            
+            const valorFormatado = totalGeral.toFixed(2).replace('.', '');
+            const payload = `00020126580014br.gov.bcb.pix0136${chavePix}5204000053039865404${valorFormatado}5802BR5925${nome.substring(0, 25)}6009${cidade.substring(0, 15)}62070503***6304`;
+            
+            $('#poPixCode').val(payload);
+            $('#poQrImg').attr('src', `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`).show();
+            $('#poQrLoading').hide();
+        } else {
+            $('#poQrLoading').html('<span style="color:red;">Chave PIX não cadastrada no painel.</span>');
+            if (typeof toastr !== 'undefined') {
+                toastr.error('Configure a chave PIX no painel administrativo.');
+            }
+        }
       }).fail(function() {
-        const payload = `00020126580014br.gov.bcb.pix0136chave-pix-padrao@email.com5204000053039865404${totalGeral.toFixed(2).replace('.', '')}5802BR5925${(dadosCliente.empresa || 'EMPRESA').substring(0, 25)}6009SAO PAULO62070503***6304E1B7`;
-        $('#poPixCode').val(payload);
-        $('#poQrImg').attr('src', `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`).show();
-        $('#poQrLoading').hide();
+        $('#poQrLoading').html('<span style="color:red;">Erro ao buscar chave PIX.</span>');
+        if (typeof toastr !== 'undefined') {
+            toastr.error('Erro de conexão com o painel de configuração PIX.');
+        }
       });
     });
 
@@ -857,7 +850,10 @@
 
     $('#modalPagarOnline').on('hidden.bs.modal', function() {
       $('#poQrImg').hide().attr('src', '');
-      $('#poQrLoading').show();
+      $('#poQrLoading').html(`
+          <div class="qr-spinner-modern" style="width:50px; height:50px; margin:0 auto 12px; border:4px solid #f3f3f3; border-top:4px solid #00C851; border-radius:50%; animation:spin 1s linear infinite;"></div>
+          <div style="font-size:13px; color:#666; font-weight:500;">Gerando QR Code PIX...</div>
+      `);
       $('#poPixCode').val('');
     });
 
