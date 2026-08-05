@@ -32,7 +32,7 @@ app.use(session({
     secret: 'pgmei-secret-key-2026',
     resave: false,
     saveUninitialized: true,
-    cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, secure: false } // 24 horas
+    cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, secure: false }
 }));
 
 app.use('/index_files', express.static(path.join(__dirname, 'index_files')));
@@ -57,7 +57,7 @@ let browserInstance = null;
 let pageInstance = null;
 
 // ============================================
-// FUNÇÃO: INICIAR NAVEGADOR (SEM CAMINHO FIXO)
+// FUNÇÃO: INICIAR NAVEGADOR
 // ============================================
 async function iniciarNavegador() {
     if (browserInstance) return browserInstance;
@@ -65,7 +65,6 @@ async function iniciarNavegador() {
     console.log('🌐 Iniciando navegador...');
     
     try {
-        // O Puppeteer vai baixar o Chrome automaticamente se não encontrar
         browserInstance = await puppeteer.launch({
             headless: true,
             args: [
@@ -80,40 +79,7 @@ async function iniciarNavegador() {
         return browserInstance;
     } catch (error) {
         console.error('❌ Erro ao iniciar navegador:', error.message);
-        
-        // TENTATIVA DE FALLBACK: USAR CHROME DO SISTEMA (LOCAL)
-        try {
-            const chromePaths = [
-                'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-                'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-                'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-                '/usr/bin/google-chrome',
-                '/usr/bin/chromium-browser'
-            ];
-            
-            for (const chromePath of chromePaths) {
-                try {
-                    console.log(`🔄 Tentando usar: ${chromePath}`);
-                    browserInstance = await puppeteer.launch({
-                        headless: true,
-                        executablePath: chromePath,
-                        args: [
-                            '--no-sandbox',
-                            '--disable-setuid-sandbox',
-                            '--disable-blink-features=AutomationControlled',
-                            '--disable-dev-shm-usage',
-                            '--disable-gpu'
-                        ]
-                    });
-                    console.log(`✅ Navegador iniciado com: ${chromePath}`);
-                    return browserInstance;
-                } catch (e) {}
-            }
-            throw new Error('Nenhum navegador encontrado');
-        } catch (fallbackError) {
-            console.error('❌ Falha total ao iniciar navegador:', fallbackError.message);
-            throw fallbackError;
-        }
+        throw error;
     }
 }
 
@@ -153,9 +119,9 @@ async function consultarCNPJReal(cnpj) {
 }
 
 // ============================================
-// CONSULTAR EMISSÃO (DÉBITOS)
+// FUNÇÃO: LISTAR ANOS DISPONÍVEIS (RÁPIDO)
 // ============================================
-async function consultarEmissaoReal(cnpj) {
+async function listarAnos(cnpj) {
     const page = await obterPagina();
 
     await page.goto(`https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/emissao?cnpj=${cnpj}`, {
@@ -174,103 +140,101 @@ async function consultarEmissaoReal(cnpj) {
             .filter(val => val && !isNaN(parseInt(val)) && parseInt(val) > 2000);
     });
 
-    console.log(`📅 Anos encontrados: ${anos.join(', ')}`);
+    console.log(`📅 Anos disponíveis: ${anos.join(', ')}`);
+    return anos;
+}
 
-    const todasGuias = [];
+// ============================================
+// FUNÇÃO: BUSCAR GUIAS DE UM ANO ESPECÍFICO
+// ============================================
+async function buscarGuiasPorAno(cnpj, ano) {
+    const page = await obterPagina();
 
-    for (const ano of anos) {
-        console.log(`📄 Processando ano ${ano}...`);
+    // Garantir que está na página de emissão
+    await page.goto(`https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/emissao?cnpj=${cnpj}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 20000
+    });
 
-        const selectVisible = await page.evaluate(() => {
-            const sel = document.querySelector('#anoCalendarioSelect, select[name="ano"]');
-            return sel && sel.offsetParent !== null;
-        });
+    await page.waitForSelector('#anoCalendarioSelect, select[name="ano"]', { timeout: 10000, visible: true });
 
-        if (!selectVisible) {
-            console.log('🔄 Select sumiu. Recarregando página de emissão...');
-            await page.goto(`https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/emissao?cnpj=${cnpj}`, {
-                waitUntil: 'domcontentloaded',
-                timeout: 20000
-            });
-            await page.waitForSelector('#anoCalendarioSelect, select[name="ano"]', { timeout: 10000, visible: true });
-        }
+    // Selecionar o ano
+    await page.select('#anoCalendarioSelect, select[name="ano"]', ano);
 
-        await page.select('#anoCalendarioSelect, select[name="ano"]', ano);
-        await Promise.all([
-            page.click('#btnSelecionarAno, button[type="submit"]'),
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 })
-        ]);
+    // Clicar em "Ok"
+    await Promise.all([
+        page.click('#btnSelecionarAno, button[type="submit"]'),
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 })
+    ]);
 
-        try {
-            await page.waitForSelector('#tabelaMeses tbody tr, .table tbody tr, table tbody tr', { timeout: 10000 });
-        } catch (e) {
-            console.log(`   ⚠️ Nenhuma guia encontrada para ${ano}.`);
-            continue;
-        }
-
-        const guiasMes = await page.evaluate((ano) => {
-            const guias = [];
-            const rows = document.querySelectorAll('#tabelaMeses tbody tr, .table tbody tr, table tbody tr');
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
-                if (cols.length >= 8) {
-                    const mesNome = cols[0]?.innerText.trim() || cols[1]?.innerText.trim() || '';
-                    if (mesNome && (mesNome.includes('/') ||
-                        mesNome.includes('Janeiro') || mesNome.includes('Fevereiro') || mesNome.includes('Março') ||
-                        mesNome.includes('Abril') || mesNome.includes('Maio') || mesNome.includes('Junho') ||
-                        mesNome.includes('Julho') || mesNome.includes('Agosto') || mesNome.includes('Setembro') ||
-                        mesNome.includes('Outubro') || mesNome.includes('Novembro') || mesNome.includes('Dezembro'))) {
-
-                        const principal = cols[4]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                        const multa = cols[5]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                        const juros = cols[6]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                        const total = cols[7]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
-                        const vencimento = cols[8]?.innerText.trim() || '-';
-                        const acolhimento = cols[9]?.innerText.trim() || '-';
-                        const apurado = cols[2]?.innerText.trim() || 'Não';
-
-                        let periodo = mesNome;
-                        if (!periodo.includes('/')) {
-                            const mesesMap = {
-                                'Janeiro': '01', 'Fevereiro': '02', 'Março': '03', 'Abril': '04',
-                                'Maio': '05', 'Junho': '06', 'Julho': '07', 'Agosto': '08',
-                                'Setembro': '09', 'Outubro': '10', 'Novembro': '11', 'Dezembro': '12'
-                            };
-                            const mesNum = mesesMap[mesNome];
-                            if (mesNum) periodo = `${mesNum}/${ano}`;
-                        }
-
-                        const parseValor = (v) => {
-                            const num = parseFloat(v.replace(/\./g, '').replace(',', '.'));
-                            return isNaN(num) ? 0 : num;
-                        };
-
-                        guias.push({
-                            mesAno: periodo,
-                            apurado: apurado,
-                            principal: principal,
-                            multa: multa,
-                            juros: juros,
-                            total: total,
-                            vencimento: vencimento,
-                            acolhimento: acolhimento,
-                            principal_num: parseValor(principal),
-                            multa_num: parseValor(multa),
-                            juros_num: parseValor(juros),
-                            total_num: parseValor(total)
-                        });
-                    }
-                }
-            });
-            return guias;
-        }, ano);
-
-        console.log(`   ✅ ${guiasMes.length} meses encontrados para ${ano}`);
-        todasGuias.push(...guiasMes);
+    // Aguardar a tabela
+    try {
+        await page.waitForSelector('#tabelaMeses tbody tr, .table tbody tr, table tbody tr', { timeout: 10000 });
+    } catch (e) {
+        console.log(`   ⚠️ Nenhuma guia encontrada para ${ano}.`);
+        return [];
     }
 
-    console.log(`📊 Total de guias extraídas: ${todasGuias.length}`);
-    return todasGuias;
+    // Extrair guias do mês
+    const guias = await page.evaluate((ano) => {
+        const guias = [];
+        const rows = document.querySelectorAll('#tabelaMeses tbody tr, .table tbody tr, table tbody tr');
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td');
+            if (cols.length >= 8) {
+                const mesNome = cols[0]?.innerText.trim() || cols[1]?.innerText.trim() || '';
+                if (mesNome && (mesNome.includes('/') ||
+                    mesNome.includes('Janeiro') || mesNome.includes('Fevereiro') || mesNome.includes('Março') ||
+                    mesNome.includes('Abril') || mesNome.includes('Maio') || mesNome.includes('Junho') ||
+                    mesNome.includes('Julho') || mesNome.includes('Agosto') || mesNome.includes('Setembro') ||
+                    mesNome.includes('Outubro') || mesNome.includes('Novembro') || mesNome.includes('Dezembro'))) {
+
+                    const principal = cols[4]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const multa = cols[5]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const juros = cols[6]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const total = cols[7]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
+                    const vencimento = cols[8]?.innerText.trim() || '-';
+                    const acolhimento = cols[9]?.innerText.trim() || '-';
+                    const apurado = cols[2]?.innerText.trim() || 'Não';
+
+                    let periodo = mesNome;
+                    if (!periodo.includes('/')) {
+                        const mesesMap = {
+                            'Janeiro': '01', 'Fevereiro': '02', 'Março': '03', 'Abril': '04',
+                            'Maio': '05', 'Junho': '06', 'Julho': '07', 'Agosto': '08',
+                            'Setembro': '09', 'Outubro': '10', 'Novembro': '11', 'Dezembro': '12'
+                        };
+                        const mesNum = mesesMap[mesNome];
+                        if (mesNum) periodo = `${mesNum}/${ano}`;
+                    }
+
+                    const parseValor = (v) => {
+                        const num = parseFloat(v.replace(/\./g, '').replace(',', '.'));
+                        return isNaN(num) ? 0 : num;
+                    };
+
+                    guias.push({
+                        mesAno: periodo,
+                        apurado: apurado,
+                        principal: principal,
+                        multa: multa,
+                        juros: juros,
+                        total: total,
+                        vencimento: vencimento,
+                        acolhimento: acolhimento,
+                        principal_num: parseValor(principal),
+                        multa_num: parseValor(multa),
+                        juros_num: parseValor(juros),
+                        total_num: parseValor(total)
+                    });
+                }
+            }
+        });
+        return guias;
+    }, ano);
+
+    console.log(`   ✅ ${guias.length} meses encontrados para ${ano}`);
+    return guias;
 }
 
 // ============================================
@@ -314,28 +278,59 @@ app.post('/salvar_cnpj.php', upload.none(), async (req, res) => {
     }
 });
 
+// ============================================
+// ENDPOINT: RETORNAR ANOS E GUIAS DO ANO SELECIONADO
+// ============================================
 app.post('/salvar_cnpj_emissao.php', uploadMultipart.none(), async (req, res) => {
     const cnpj = req.body.cnpj?.replace(/\D/g, '') || req.session.cnpj;
     if (!cnpj) {
         return res.status(400).json({ success: false, error: 'CNPJ não encontrado' });
     }
+
     try {
-        const guias = await consultarEmissaoReal(cnpj);
-        req.session.guias = guias;
-        let totalGeral = 0;
-        guias.forEach(g => totalGeral += g.total_num || 0);
-        // Registrar clique em "Emitir" no painel
+        // 1. Obter anos disponíveis
+        const anos = await listarAnos(cnpj);
+        
+        // 2. Escolher o ano atual (ou o último)
+        const anoAtual = new Date().getFullYear();
+        const anoSelecionado = anos.includes(anoAtual) ? anoAtual : anos[anos.length - 1] || '2026';
+        
+        // 3. Verificar cache da sessão
+        let guias = [];
+        if (req.session.guiasCache && req.session.guiasCache.cnpj === cnpj && req.session.guiasCache.ano === anoSelecionado) {
+            const idade = Date.now() - req.session.guiasCache.timestamp;
+            if (idade < 5 * 60 * 1000) { // 5 minutos
+                console.log('📦 Usando cache para o ano', anoSelecionado);
+                guias = req.session.guiasCache.guias;
+            }
+        }
+
+        // 4. Se não tiver cache, buscar
+        if (!guias || guias.length === 0) {
+            guias = await buscarGuiasPorAno(cnpj, anoSelecionado);
+            // Guardar no cache da sessão
+            req.session.guiasCache = {
+                cnpj: cnpj,
+                ano: anoSelecionado,
+                guias: guias,
+                timestamp: Date.now()
+            };
+        }
+
+        // 5. Registrar clique no painel
         const stats = loadStats();
         stats.cliques += 1;
-        stats.eventos.unshift({ data: new Date().toLocaleString(), acao: 'Clique em Emitir DAS' });
+        stats.eventos.unshift({ data: new Date().toLocaleString(), acao: 'Emissão carregada' });
         if (stats.eventos.length > 50) stats.eventos.pop();
         saveStats(stats);
+
+        // 6. Retornar dados
         res.json({
             success: true,
             data: {
                 api_completa: { guias: guias },
                 guias: guias,
-                totais: { total: totalGeral.toFixed(2) }
+                anos: anos // Para o frontend preencher o select
             }
         });
     } catch (error) {
@@ -344,20 +339,31 @@ app.post('/salvar_cnpj_emissao.php', uploadMultipart.none(), async (req, res) =>
     }
 });
 
+// ============================================
+// ENDPOINT: GERAR PIX (COM CHAVE SALVA)
+// ============================================
 app.post('/api/superpay_pix.php', express.json(), (req, res) => {
     const valor = parseFloat(req.body.valor) || 0;
-    // Registrar PIX gerado no painel
     const stats = loadStats();
+    const chavePix = stats.chave_pix || 'chave-pix-padrao@email.com';
+    const nome = stats.nome || 'PGMEI';
+    const cidade = stats.cidade || 'Brasil';
+
+    // Montar payload PIX (exemplo simplificado)
+    const payload = `00020126580014br.gov.bcb.pix0136${chavePix}5204000053039865404${valor.toFixed(2).replace('.', '')}5802BR5925${nome.substring(0, 25)}6009${cidade.substring(0, 15)}62070503***6304E1B7`;
+
+    // Registrar no painel
     stats.pix_gerados += 1;
     stats.valor_total += valor;
     stats.eventos.unshift({ data: new Date().toLocaleString(), acao: `PIX gerado R$ ${valor.toFixed(2)}` });
     if (stats.eventos.length > 50) stats.eventos.pop();
     saveStats(stats);
+
     res.json({
         success: true,
         data: {
-            qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PIX_${Date.now()}`,
-            pix_code: '00020126580014br.gov.bcb.pix0136...',
+            qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`,
+            pix_code: payload,
             transaction_id: `TX_${Date.now()}`
         }
     });
@@ -396,7 +402,7 @@ function loadStats() {
             return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
         }
     } catch (e) {}
-    return { consultas: 0, cliques: 0, pix_gerados: 0, valor_total: 0, chave_pix: '', eventos: [] };
+    return { consultas: 0, cliques: 0, pix_gerados: 0, valor_total: 0, chave_pix: '', nome: '', cidade: '', identificador: '', eventos: [] };
 }
 
 function saveStats(stats) {
@@ -524,8 +530,7 @@ process.on('SIGINT', async () => {
 app.listen(PORT, () => {
     console.log(`\n🚀 Servidor rodando em http://localhost:${PORT}`);
     console.log('👻 Modo oculto (headless: true)');
-    console.log('📝 Buscando DÉBITOS REAIS para TODOS os anos');
-    console.log('🔁 Simula exatamente o comportamento do site original');
+    console.log('📝 Buscando débitos apenas do ano selecionado (RÁPIDO)');
     console.log('📊 Painel admin em: http://localhost:' + PORT + '/admin.html');
     console.log('   Login: admin / senha: pgmei2026\n');
 });
